@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production RF Control Panel</title>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: system-ui, sans-serif; padding: 30px; max-width: 700px; margin: 0 auto; }
+        .section { background: #1e293b; border-radius: 8px; padding: 24px; border: 1px solid #334155; margin-bottom: 20px; }
+        h2 { color: #38bdf8; font-size: 20px; margin-bottom: 15px; border-bottom: 1px solid #334155; padding-bottom: 8px; }
+        .form-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        input[type="text"], input[type="number"] {
+            flex: 1; padding: 10px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; font-size: 14px;
+        }
+        button {
+            background: #0284c7; color: white; border: none; padding: 10px 20px; font-weight: bold; border-radius: 6px; cursor: pointer; white-space: nowrap;
+        }
+        button:hover { background: #0369a1; }
+        button.action-btn { background: #10b981; width: 100%; padding: 14px; font-size: 15px; }
+        button.action-btn:hover { background: #059669; }
+        .status-box { padding: 12px; border-radius: 6px; background: #334155; font-family: monospace; font-size: 13px; display: none; margin-top: 10px; border-left: 4px solid #38bdf8; }
+    </style>
+</head>
+<body>
+    <h1 style="font-size: 26px; margin-bottom: 25px; color: #ffffff;">⚙️ RF Show-Control Admin Console</h1>
+    
+    <!-- 1. GOOGLE SHEET TARGET SPECIFICATION -->
+    <div class="section">
+        <h2>📋 Target Spreadsheet Link</h2>
+        <form action="/config/sheet" method="POST" onsubmit="postAction(event, 'sheet-status')">
+            <div class="form-group">
+                <input type="text" name="sheet_url" placeholder="Paste full Google Sheets URL here..." required>
+                <button type="submit">💾 Save Link</button>
+            </div>
+        </form>
+        <div id="sheet-status" class="status-box"></div>
+    </div>
+
+    <!-- 2. REHEARSAL MANUAL SPRINT CUE OVERRIDE -->
+    <div class="section">
+        <h2>🎛️ Rehearsal Manual Track Jump</h2>
+        <form action="/config/jump" method="POST" onsubmit="postAction(event, 'jump-status')">
+            <div class="form-group">
+                <input type="number" name="song_index" min="1" placeholder="Enter target Song Index (e.g., 4)" required>
+                <button type="submit" style="background:#f59e0b;">🚀 Push Track Change</button>
+            </div>
+        </form>
+        <div id="jump-status" class="status-box"></div>
+    </div>
+
+    <!-- 3. FORCE MANUAL BluePrint CACHE SYNC -->
+    <div class="section">
+        <h2>🔄 Database Synchronization</h2>
+        <form action="/config/sync" method="POST" onsubmit="postAction(event, 'sync-status')">
+            <button type="submit" class="action-btn">⚡ Force Google Sheets Re-Sync</button>
+        </form>
+        <div id="sync-status" class="status-box"></div>
+    </div>
+
+    <script>
+        async function postAction(event, statusId) {
+            event.preventDefault();
+            const box = document.getElementById(statusId);
+            box.style.display = "block";
+            box.innerText = "⏳ Executing system command on onsite server...";
+            box.style.borderLeftColor = "#38bdf8";
+
+            const form = event.target;
+            const data = new URLSearchParams(new FormData(form));
+
+            try {
+                const res = await fetch(form.action, { method: 'POST', body: data });
+                box.innerText = await res.text();
+                box.style.borderLeftColor = box.innerText.includes("❌") || box.innerText.includes("⚠️") ? "#ef4444" : "#10b981";
+            } catch {
+                box.innerText = "❌ Network Error: Onsite server node unreachable.";
+                box.style.borderLeftColor = "#ef4444";
+            }
+        }
+    </script>
+</body>
+</html>

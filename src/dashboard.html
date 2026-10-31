@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backstage RF Tracker</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            background: #11141a; color: #f3f4f6; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden; height: 100vh; width: 100vw;
+            padding: 1.5vh 1.5vw;
+        }
+        .dashboard {
+            display: grid; grid-template-rows: 8vh 86vh; height: 100%; gap: 1.5vh;
+        }
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: #1e2530; padding: 0 2vw; border-radius: 8px; border: 1px solid #2e3748;
+        }
+        h1 { font-size: 3.5vh; color: #38bdf8; }
+        select {
+            background: #2d3748; color: #fff; border: 1px solid #4a5568;
+            padding: 0.8vh 1vw; font-size: 2.2vh; border-radius: 6px; cursor: pointer;
+        }
+        .grid-container {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5vw;
+        }
+        .column {
+            background: #161b22; border-radius: 8px; padding: 2vh 1.5vw;
+            display: flex; flex-direction: column; gap: 1.5vh; border-top: 6px solid #4b5563;
+            overflow-y: auto;
+        }
+        .column.outgoing { border-top-color: #10b981; }
+        .column.continuing { border-top-color: #6b7280; }
+        .column.incomming { border-top-color: #ef4444; }
+        .column h2 { font-size: 2.8vh; margin-bottom: 0.5vh; text-transform: uppercase; letter-spacing: 1px; }
+        .card {
+            background: #21262d; border: 1px solid #30363d; border-radius: 6px;
+            padding: 1.5vh 1vw; display: flex; flex-direction: column; gap: 0.5vh;
+        }
+        .card-header { display: flex; justify-content: space-between; align-items: center; }
+        .gear-id { background: #38bdf8; color: #0f172a; padding: 0.2vh 0.5vw; font-weight: bold; border-radius: 4px; font-size: 1.8vh; }
+        .performer { font-size: 2.4vh; font-weight: bold; color: #ffffff; }
+        .asset-name { font-size: 2vh; color: #9ca3af; }
+        .notes { font-size: 1.8vh; color: #fbbf24; font-style: italic; border-top: 1px solid #30363d; padding-top: 0.5vh; margin-top: 0.5vh; }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <header>
+            <h1 id="song-title">Awaiting Live Feed...</h1>
+            <select id="song-selector" onchange="manualTrackChange(this.value)">
+                <option value="">Syncing Setlist...</option>
+            </select>
+        </header>
+        <div class="grid-container">
+            <div class="column outgoing"><h2>🟢 Hand Out</h2><div id="inc-list"></div></div>
+            <div class="column continuing"><h2>⚫ Continuing</h2><div id="cont-list"></div></div>
+            <div class="column incomming"><h2>🔴 Handback</h2><div id="out-list"></div></div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let showData = {};
+
+        function connect() {
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                
+                if (msg.type === "INITIAL_SYNC") {
+                    showData = msg.show_data;
+                    populateDropdown();
+                    renderSong(msg.current_song_idx);
+                } else if (msg.type === "TRACK_CHANGE") {
+                    renderSong(msg.song_index);
+                }
+            };
+
+            ws.onclose = () => setTimeout(connect, 2000); // Instant reconnect fail-safe
+        }
+
+        function populateDropdown() {
+            const selector = document.getElementById("song-selector");
+            selector.innerHTML = "";
+            Object.keys(showData).sort((a,b) => a-b).forEach(idx => {
+                let opt = document.createElement("option");
+                opt.value = idx;
+                opt.innerText = `Track ${idx}: ${showData[idx].title}`;
+                selector.appendChild(opt);
+            });
+        }
+
+        function renderSong(idx) {
+            document.getElementById("song-selector").value = idx;
+            const song = showData[idx];
+            if (!song) return;
+
+            document.getElementById("song-title").innerText = `TRACK ${idx}: ${song.title}`;
+            
+            const buildHtml = list => list.map(a => `
+                <div class="card">
+                    <div class="card-header">
+                        <span class="performer">${a.performer}</span>
+                        <span class="gear-id">${a.id}</span>
+                    </div>
+                    <span class="asset-name">${a.name}</span>
+                    ${a.notes ? `<span class="notes">⚠️ ${a.notes}</span>` : ''}
+                </div>
+            `).join('');
+
+            document.getElementById("inc-list").innerHTML = buildHtml(song.incoming);
+            document.getElementById("cont-list").innerHTML = buildHtml(song.continuing);
+            document.getElementById("out-list").innerHTML = buildHtml(song.outgoing);
+        }
+
+        function manualTrackChange(val) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "MANUAL_CHANGE", song_index: parseInt(val) }));
+            }
+        }
+
+        connect();
+    </script>
+</body>
+</html>
